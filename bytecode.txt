@@ -1,0 +1,22 @@
+prints:
+    PUSH BP
+    MOV BP, SP
+    PRINTSTACK
+    PUSH 10
+    PUSH 20
+    PUSH 30
+    PRINTSTACK
+    CLEARF
+    PRINTSTACK
+    POP BP
+    RET
+
+
+_start:
+    PRINTSTACK
+    PUSH 1
+    PUSH 2
+    PUSH 3
+    PRINTSTACK
+    CALL prints
+    PRINTSTACK
