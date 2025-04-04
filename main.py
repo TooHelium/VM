@@ -1,357 +1,368 @@
 import re
 
-def to_number(s):
-    if s in ["-", ".", "-."]:
-        return float(0)
-    else:
-        return float(s) 
-
-def is_number(s):
-    if not s:
-        return False
-    num_re = r"-?\d*\.?\d*"
-    match = re.match(num_re, s)
-    return s == match.group()
-
-def handle(bytecodes, i = 0):
-    command_re = r"\s*(?P<opcode>[A-Z]+)\s?(?P<arg1>[a-zA-z0-9_\-.]+)?,?\s?(?P<arg2>[a-zA-z0-9_\-.]+)?$"
-
-    regs = {
-        "AX" : 0,
-        "BX" : 0,
-        "CX" : 0,
-        "DX" : 0,
-        "SP" : -1,
-        "BP" : 0,
-    }
+class VirtualMachine:
     
-    FLAGS = 0 #E NE G L
-    E = 1
-    NE = 2
-    G = 4
-    L = 8
-
-    STACK = []
-    
-    VARS = []
-
-    max_i = 0
-    for key in bytecodes.keys():
-        if isinstance(key, int):
-            max_i += 1
-
-    while i < max_i:
-        if i not in bytecodes:
-            print(f"{i}: Unknown line")
-            return
-
-        if bytecodes[i] == "":
-            i += 1
-            continue
-
-        match = re.search(command_re, bytecodes[i])
+    def __init__(self):
+        self.REGS = {
+            "AX" : 0,
+            "BX" : 0,
+            "CX" : 0,
+            "DX" : 0,
+            "SP" : -1,
+            "BP" : 0,
+        }
+        self.IP = 0
         
-        if match is None:
-            print(f"{i}: Unknown command")
-            return
+        self.FLAGS = 0 #E NE G L
+        self.E = 1
+        self.NE = 2
+        self.G = 4
+        self.L = 8
+        
+        self.STACK = []
+        
+        self.command_re = r"\s*(?P<opcode>[A-Z]+)\s?(?P<arg1>[a-zA-z0-9_\-.]+)?,?\s?(?P<arg2>[a-zA-z0-9_\-.]+)?$"
 
-        opcode = match.group('opcode')
-        arg1 = match.group('arg1')
-        arg2 = match.group('arg2')
 
-        match opcode:
-            case "MOV":
-                if arg1 in regs:
-                    if arg2 in regs:
-                        regs[arg1] = regs[arg2]
-                    elif is_number(arg2):
-                        regs[arg1] = to_number(arg2)
-                    else:
-                        print(f"{i}: Invalid second argument")
-                        return
-                else:
-                    print(f"{i}: Invalid first argument")
-                    return
-            
-            #arithmetic operations
-            case "ADD": 
-                if arg1 in regs:
-                    if arg2 in regs:
-                        regs[arg1] = regs[arg1] + regs[arg2]
-                    elif is_number(arg2):
-                        regs[arg1] = regs[arg1] + to_number(arg2)
-                    else:
-                        print(f"{i}: Invalid second argument")
-                        return
-                else:
-                    print(f"{i}: Invalid first argument")
-                    return
+    def run(self, bytecodes, ip = 0):
+        self.IP = ip
+        
+        max_IP = 0
+        for key in bytecodes.keys():
+            if isinstance(key, int):
+                max_IP += 1
 
-            case "SUB": 
-                if arg1 in regs:
-                    if arg2 in regs:
-                        regs[arg1] = regs[arg1] - regs[arg2]
-                    elif is_number(arg2):
-                        regs[arg1] = regs[arg1] - to_number(arg2)
-                    else:
-                        print(f"{i}: Invalid second argument")
-                        return
-                else:
-                    print(f"{i}: Invalid first argument")
-                    return
-            
-            case "MULT": 
-                if arg1 in regs:
-                    if arg2 in regs:
-                        regs["DX"] = regs[arg1] * regs[arg2]
-                    elif is_number(arg2):
-                        regs["DX"] = regs[arg1] * to_number(arg2)
-                    else:
-                        print(f"{i}: Invalid second argument")
-                        return
-                else:
-                    print(f"{i}: Invalid first argument")
-                    return
-            
-            case "DIV": 
-                if arg1 in regs:
-                    if arg2 in regs:
-                        regs["DX"] = regs[arg1] / regs[arg2]
-                    elif is_number(arg2):
-                        regs["DX"] = regs[arg1] / to_number(arg2)
-                    else:
-                        print(f"{i}: Invalid second argument")
-                        return
-                else:
-                    print(f"{i}: Invalid first argument")
-                    return
-            
-            #stack operations
-            case "PUSH":
-                if arg1 in regs:
-                    regs["SP"] += 1
-                    STACK.append( regs[arg1] )
-                elif is_number(arg1):
-                    regs["SP"] += 1
-                    STACK.append( to_number(arg1) )
-                else:
-                    print(f"{i}: Invalid argument")
-                    return
-
-            case "POP":
-                if arg1 in regs:
-                    if regs["SP"] < 0:
-                        print(f"{i}: Stack is empty")
-                        return
-                        
-                    elif regs["SP"] < regs["BP"]:
-                        print(f"{i}: You went out of your stack frame")
-                        return
-                        
-                    regs["SP"] -= 1
-                    regs[arg1] = STACK.pop()
-                else:
-                    print(f"{i}: Invalid argument")
-                    return
-          
-            #call operations 
-            case "CALL":
-                if arg1 in regs:
-                    if isinstance(regs[arg1], int):
-                        regs["SP"] += 1
-                        STACK.append(i + 1)
-                        i = regs[arg1]
-                        continue
-                    else:
-                        print(f"{i}: Line number must be integer")
-                        return
-                elif arg1.isdigit():
-                    regs["SP"] += 1
-                    STACK.append(i + 1)
-                    i = int(arg1)
-                    continue
-                elif arg1 in bytecodes:
-                    regs["SP"] += 1
-                    STACK.append(i + 1)
-                    i = bytecodes[arg1]
-                    continue
-                else:
-                    print(f"{i}: Invalid argument or label")
-                    return
-
-            case "CLEARF":
-                diff = regs["SP"] - regs["BP"]
-                if diff < 0:
-                    print(f"{i}: SP is lower than BP")
-                    return
-                elif diff > 0:
-                    regs["SP"] = regs["BP"]
-                    try:
-                        del STACK[regs["BP"] + 1:]
-                    except Exception as e:
-                        print(f"{i}: Can not clear stack frame because {e}")
-
-            case "RET":
-                if regs["SP"] < 0:
-                    print(f"{i}: Stack is empty")
-                    return
-                        
-                elif regs["SP"] < regs["BP"]:
-                    print(f"{i}: You did not restore BP")
-                    return
-                        
-                regs["SP"] -= 1
-                i = STACK.pop()
-                continue
-
-            case "PRINTSTACK":
-                print(STACK)
-
-            #compare
-            case "CMP":
-                left = None
-                right = None
-                if arg1 in regs and arg2 in regs:
-                    left = regs[arg1]
-                    right = regs[arg2]
-                elif arg1 in regs and is_number(arg2):
-                    left = regs[arg1]
-                    right = to_number(arg2)
-                elif is_number(arg1) and arg2 in regs:
-                    left = to_number(arg1)
-                    right = regs[arg2]
-                elif is_number(arg1) and is_number(arg2):
-                    left = to_number(arg1)
-                    right = to_number(arg2)
-                else:
-                    print(f"{i}: Ivalid first/second/both argument(s)")
-                    return
-
-                FLAGS = 0
-                if left == right:
-                    FLAGS |= 1
-                elif left < right:
-                    FLAGS |= 8
-                    FLAGS |= 2
-                elif left > right:
-                    FLAGS |= 4
-                    FLAGS |= 2    
-
-            #jumps
-            case "JMP":
-                if arg1 in regs:
-                    if isinstance(regs[arg1], int):
-                        i = regs[arg1]
-                        continue
-                    else:
-                        print(f"{i}: Line number must be integer")
-                        return
-                elif arg1.isdigit():
-                    i = int(arg1)
-                    continue
-                elif arg1 in bytecodes:
-                    i = bytecodes[arg1]
-                    continue
-                else:
-                    print(f"{i}: Invalid argument or label")
-                    return
-
-            case "JMPE" | "JMPNE" | "JMPG" | "JMPGE" | "JMPL" | "JMPLE":
-                new_i = None
-                if arg1 in regs:
-                    if isinstance(regs[arg1], int):
-                        new_i = regs[arg1]
-                    else:
-                        print(f"{i}: Line number must be integer")
-                        return
-                elif arg1.isdigit():
-                    new_i = int(arg1)
-                elif arg1 in bytecodes:
-                    new_i = bytecodes[arg1]
-                else:
-                    print(f"{i}: Invalid argument or label")
-                    return
-                
-                match opcode:
-                    case "JMPE":
-                        if FLAGS & E:
-                            i = new_i
-                            continue  
-                    case "JMPNE":
-                        if FLAGS & NE:
-                            i = new_i
-                            continue
-                    case "JMPG":
-                        if FLAGS & G:
-                            i = new_i
-                            continue
-                    case "JMPGE":
-                        if FLAGS & G or FLAGS & E:
-                            i = new_i
-                            continue
-                    case "JMPL":
-                        if FLAGS & L:
-                            i = new_i
-                            continue
-                    case "JMPLE":
-                        if FLAGS & L or FLAGS & E:
-                            i = new_i
-                            continue
-            #no operation
-            case "NOP":
-                pass
-
-            #print
-            case "PRINT":
-                if arg1 in regs:
-                    print(f"{arg1} = {regs[arg1]}")
-                else:
-                    print(f"{i}: Invalid argument")
-                    print
-
-            case _:
-                print(f"{i}: Unknown command")
+        while self.IP < max_IP:
+            if self.IP not in bytecodes:
+                print(f"{self.IP}: Unknown line")
                 return
 
-        i += 1
-    else: #while else
-        if i > max_i:
-            print(f"{i}: Unknown line. Max line is {max_i - 1}")
+            if bytecodes[self.IP] == "":
+                self.IP += 1
+                continue
 
-def run(file):
-    bytecodes = dict()
+            match = re.search(self.command_re, bytecodes[self.IP])
+            
+            if match is None:
+                print(f"{self.IP}: Unknown command")
+                return
 
-    if file:
-        line_number = 0
-        label_re = r"\s*(?P<label>\w+):"
-        match = None
-        label = None
+            opcode = match.group('opcode')
+            arg1 = match.group('arg1')
+            arg2 = match.group('arg2')
 
-        for line in file:
-            match = re.search(label_re, line)
-            if match:
-                label = match.group('label')
+            match opcode:
+                case "MOV":
+                    if arg1 in self.REGS:
+                        if arg2 in self.REGS:
+                            self.REGS[arg1] = self.REGS[arg2]
+                        elif self.is_number(arg2):
+                            self.REGS[arg1] = self.to_number(arg2)
+                        else:
+                            print(f"{self.IP}: Invalid second argument")
+                            return
+                    else:
+                        print(f"{self.IP}: Invalid first argument")
+                        return
+                
+                #arithmetic operations
+                case "ADD": 
+                    if arg1 in self.REGS:
+                        if arg2 in self.REGS:
+                            self.REGS[arg1] = self.REGS[arg1] + self.REGS[arg2]
+                        elif self.is_number(arg2):
+                            self.REGS[arg1] = self.REGS[arg1] + self.to_number(arg2)
+                        else:
+                            print(f"{self.IP}: Invalid second argument")
+                            return
+                    else:
+                        print(f"{self.IP}: Invalid first argument")
+                        return
 
-                if label in bytecodes:
-                    print(f"Redeclaration of label '{label}' on {line_number} line")
+                case "SUB": 
+                    if arg1 in self.REGS:
+                        if arg2 in self.REGS:
+                            self.REGS[arg1] = self.REGS[arg1] - self.REGS[arg2]
+                        elif self.is_number(arg2):
+                            self.REGS[arg1] = self.REGS[arg1] - self.to_number(arg2)
+                        else:
+                            print(f"{self.IP}: Invalid second argument")
+                            return
+                    else:
+                        print(f"{self.IP}: Invalid first argument")
+                        return
+                
+                case "MULT": 
+                    if arg1 in self.REGS:
+                        if arg2 in self.REGS:
+                            self.REGS["DX"] = self.REGS[arg1] * self.REGS[arg2]
+                        elif self.is_number(arg2):
+                            self.REGS["DX"] = self.REGS[arg1] * self.to_number(arg2)
+                        else:
+                            print(f"{self.IP}: Invalid second argument")
+                            return
+                    else:
+                        print(f"{self.IP}: Invalid first argument")
+                        return
+                
+                case "DIV": 
+                    if arg1 in self.REGS:
+                        if arg2 in self.REGS:
+                            self.REGS["DX"] = self.REGS[arg1] / self.REGS[arg2]
+                        elif self.is_number(arg2):
+                            self.REGS["DX"] = self.REGS[arg1] / self.to_number(arg2)
+                        else:
+                            print(f"{self.IP}: Invalid second argument")
+                            return
+                    else:
+                        print(f"{self.IP}: Invalid first argument")
+                        return
+                
+                #stack operations
+                case "PUSH":
+                    if arg1 in self.REGS:
+                        self.REGS["SP"] += 1
+                        self.STACK.append( self.REGS[arg1] )
+                    elif self.is_number(arg1):
+                        self.REGS["SP"] += 1
+                        self.STACK.append( self.to_number(arg1) )
+                    else:
+                        print(f"{self.IP}: Invalid argument")
+                        return
+
+                case "POP":
+                    if arg1 in self.REGS:
+                        if self.REGS["SP"] < 0:
+                            print(f"{self.IP}: Stack is empty")
+                            return
+                            
+                        elif self.REGS["SP"] < self.REGS["BP"]:
+                            print(f"{self.IP}: You went out of your stack frame")
+                            return
+                            
+                        self.REGS["SP"] -= 1
+                        self.REGS[arg1] = self.STACK.pop()
+                    else:
+                        print(f"{self.IP}: Invalid argument")
+                        return
+              
+                #call operations 
+                case "CALL":
+                    if arg1 in self.REGS:
+                        if isinstance(self.REGS[arg1], int):
+                            self.REGS["SP"] += 1
+                            self.STACK.append(self.IP + 1)
+                            self.IP = self.REGS[arg1]
+                            continue
+                        else:
+                            print(f"{self.IP}: Line number must be integer")
+                            return
+                    elif arg1.isdigit():
+                        self.REGS["SP"] += 1
+                        self.STACK.append(self.IP + 1)
+                        self.IP = int(arg1)
+                        continue
+                    elif arg1 in bytecodes:
+                        self.REGS["SP"] += 1
+                        self.STACK.append(self.IP + 1)
+                        self.IP = bytecodes[arg1]
+                        continue
+                    else:
+                        print(f"{self.IP}: Invalid argument or label")
+                        return
+
+                case "CLEARF":
+                    diff = self.REGS["SP"] - self.REGS["BP"]
+                    if diff < 0:
+                        print(f"{self.IP}: SP is lower than BP")
+                        return
+                    elif diff > 0:
+                        self.REGS["SP"] = self.REGS["BP"]
+                        try:
+                            del self.STACK[self.REGS["BP"] + 1:]
+                        except Exception as e:
+                            print(f"{self.IP}: Can not clear stack frame because {e}")
+
+                case "RET":
+                    if self.REGS["SP"] < 0:
+                        print(f"{self.IP}: Stack is empty")
+                        return
+                            
+                    elif self.REGS["SP"] < self.REGS["BP"]:
+                        print(f"{self.IP}: You did not restore BP")
+                        return
+                            
+                    self.REGS["SP"] -= 1
+                    self.IP = self.STACK.pop()
+                    continue
+
+                case "PRINTSTACK":
+                    print(self.STACK)
+
+                #compare
+                case "CMP":
+                    left = None
+                    right = None
+                    if arg1 in self.REGS and arg2 in self.REGS:
+                        left = self.REGS[arg1]
+                        right = self.REGS[arg2]
+                    elif arg1 in self.REGS and self.is_number(arg2):
+                        left = self.REGS[arg1]
+                        right = self.to_number(arg2)
+                    elif self.is_number(arg1) and arg2 in self.REGS:
+                        left = self.to_number(arg1)
+                        right = self.REGS[arg2]
+                    elif self.is_number(arg1) and self.is_number(arg2):
+                        left = self.to_number(arg1)
+                        right = self.to_number(arg2)
+                    else:
+                        print(f"{self.IP}: Ivalid first/second/both argument(s)")
+                        return
+
+                    self.FLAGS = 0
+                    if left == right:
+                        self.FLAGS |= self.E
+                    elif left < right:
+                        self.FLAGS |= self.L
+                        self.FLAGS |= self.NE
+                    elif left > right:
+                        self.FLAGS |= self.G
+                        self.FLAGS |= self.NE
+
+                #jumps
+                case "JMP":
+                    if arg1 in self.REGS:
+                        if isinstance(self.REGS[arg1], int):
+                            self.IP = self.REGS[arg1]
+                            continue
+                        else:
+                            print(f"{self.IP}: Line number must be integer")
+                            return
+                    elif arg1.isdigit():
+                        self.IP = int(arg1)
+                        continue
+                    elif arg1 in bytecodes:
+                        self.IP = bytecodes[arg1]
+                        continue
+                    else:
+                        print(f"{self.IP}: Invalid argument or label")
+                        return
+
+                case "JMPE" | "JMPNE" | "JMPG" | "JMPGE" | "JMPL" | "JMPLE":
+                    new_IP = None
+                    if arg1 in self.REGS:
+                        if isinstance(self.REGS[arg1], int):
+                            new_IP = self.REGS[arg1]
+                        else:
+                            print(f"{self.IP}: Line number must be integer")
+                            return
+                    elif arg1.isdigit():
+                        new_IP = int(arg1)
+                    elif arg1 in bytecodes:
+                        new_IP = bytecodes[arg1]
+                    else:
+                        print(f"{self.IP}: Invalid argument or label")
+                        return
+                    
+                    match opcode:
+                        case "JMPE":
+                            if self.FLAGS & self.E:
+                                self.IP = new_IP
+                                continue  
+                        case "JMPNE":
+                            if self.FLAGS & self.NE:
+                                self.IP = new_IP
+                                continue
+                        case "JMPG":
+                            if self.FLAGS & self.G:
+                                self.IP = new_IP
+                                continue
+                        case "JMPGE":
+                            if self.FLAGS & self.G or self.FLAGS & self.E:
+                                self.IP = new_IP
+                                continue
+                        case "JMPL":
+                            if self.FLAGS & self.L:
+                                self.IP = new_IP
+                                continue
+                        case "JMPLE":
+                            if self.FLAGS & self.L or self.FLAGS & self.E:
+                                self.IP = new_IP
+                                continue
+                #no operation
+                case "NOP":
+                    pass
+
+                #print
+                case "PRINT":
+                    if arg1 in self.REGS:
+                        print(f"{arg1} = {self.REGS[arg1]}")
+                    else:
+                        print(f"{self.IP}: Invalid argument")
+                        print
+
+                case _:
+                    print(f"{self.IP}: Unknown command")
                     return
 
-                bytecodes[label] = line_number
-                bytecodes[line_number] = "NOP"
-            else:
-                bytecodes[line_number] = line.strip()
-            line_number += 1
-   
-    handle(bytecodes, bytecodes["_start"] if "_start" in bytecodes else 0)
+            self.IP += 1
+        else: #while else
+            if self.IP > max_IP:
+                print(f"{self.IP}: Unknown line. Max line is {max_IP - 1}")
+            
+
+    def load(self, file):
+        bytecodes = dict()
+
+        if file:
+            line_number = 0
+            label_re = r"\s*(?P<label>\w+):"
+            match = None
+            label = None
+
+            for line in file:
+                match = re.search(label_re, line)
+                if match:
+                    label = match.group('label')
+
+                    if label in bytecodes:
+                        print(f"Redeclaration of label '{label}' on {line_number} line")
+                        return
+
+                    bytecodes[label] = line_number
+                    bytecodes[line_number] = "NOP"
+                else:
+                    bytecodes[line_number] = line.strip()
+                line_number += 1
+       
+            self.run(bytecodes, bytecodes["_start"] if "_start" in bytecodes else 0)
+        else:
+            print("Some error with during loading file to VirtualMachine")
+    
+    
+    def to_number(self, s):
+        if s in ["-", ".", "-."]:
+            return float(0)
+        else:
+            return float(s) 
+
+
+    def is_number(self, s):
+        if not s:
+            return False
+        num_re = r"-?\d*\.?\d*"
+        match = re.match(num_re, s)
+        return s == match.group()
+
 
 def main():
-    file_path = input("Enter path to bytecode: ")
+    file_path = input("Enter path to file with bytecode: ")
+    vm = VirtualMachine()
     
     try:
-        with open(file_path, "r") as bytecode:
-            run(bytecode)
+        with open(file_path, "r") as file:
+            vm.load(file)
     except Exception as e:
         print(e)
 
 main()
-
